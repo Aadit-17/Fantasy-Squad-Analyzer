@@ -130,18 +130,16 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
 
     return players_to_replace, recommended_transfers
 
-# Display recommended transfers
-try:
-    if not recommended_transfers.empty:
-        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
-    else:
-        st.warning("No recommended transfers available.")
-except KeyError as e:
-    st.error(f"Column missing: {e}")
-    print("Recommended Transfers Columns:", recommended_transfers.columns)
+    # Display recommended transfers
+    try:
+        if not recommended_transfers.empty:
+            st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
+        else:
+            st.warning("No recommended transfers available.")
+    except KeyError as e:
+        st.error(f"Column missing: {e}")
+        print("Recommended Transfers Columns:", recommended_transfers.columns)
 
-
-# Main Streamlit app logic
 # Main Streamlit app logic
 def main():
     st.title("Fantasy Premier League Team Analyzer")
@@ -199,6 +197,14 @@ def main():
                         st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
                     else:
                         st.info("Select the number of players to replace to view transfer recommendations.")
+                else:
+                    st.error("Unable to fetch player data.")
+            else:
+                st.error("Unable to fetch your team's player data.")
+        else:
+            st.error("Unable to fetch team data. Please check your Team ID.")
+    else:
+        st.info("Enter your FPL Team ID to analyze your team.")
 
 if __name__ == "__main__":
     main()
