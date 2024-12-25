@@ -68,6 +68,7 @@ def get_all_players():
             'form': float(player['form']),  # Ensure form is a float
             'now_cost': player['now_cost'],
             'selected_by_percent': float(player['selected_by_percent']),
+            'position': player['position']
         })
     
     return pd.DataFrame(player_info)
@@ -81,7 +82,8 @@ def get_best_worst_from_team_picks(team_picks, player_data):
     worst_players = team_players.nsmallest(7, 'form')
     best_players = team_players.nlargest(7, 'form')
 
-    return worst_players[['player_name', 'form', 'now_cost']], best_players[['player_name', 'form', 'now_cost']]
+    # Include position column
+    return worst_players[['player_name', 'form', 'now_cost', 'position']], best_players[['player_name', 'form', 'now_cost', 'position']]
 
 # Function to get recommended transfers based on worst performers
 def get_recommended_transfers(worst_players, player_data):
@@ -101,10 +103,6 @@ def get_recommended_transfers(worst_players, player_data):
 
 # Function to recommend transfers based on user input for number of players to replace
 def recommend_transfers_based_on_input(worst_players, player_data, team_picks, num_to_replace):
-    # Validate input DataFrames
-    print("Worst Players Columns:", worst_players.columns)
-    print("Player Data Columns:", player_data.columns)
-
     team_player_ids = [pick['element'] for pick in team_picks['picks']]
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
 
@@ -113,7 +111,7 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
 
     recommended_transfers = pd.DataFrame()
     for _, player in players_to_replace.iterrows():
-        position = player.get('player_id')  # Replace if another column maps positions
+        position = player['position']  # Correctly accessing position here
         if not position:
             st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
             continue
@@ -128,17 +126,8 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
             recommended_transfers = pd.concat([recommended_transfers, best_candidate.to_frame().T], ignore_index=True)
             total_replace_cost -= best_candidate['now_cost']
 
-    return players_to_replace, recommended_transfers
-
-    # Display recommended transfers
-    try:
-        if not recommended_transfers.empty:
-            st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
-        else:
-            st.warning("No recommended transfers available.")
-    except KeyError as e:
-        st.error(f"Column missing: {e}")
-        print("Recommended Transfers Columns:", recommended_transfers.columns)
+    # Include position data in the final recommended transfers
+    return players_to_replace[['player_name', 'form', 'now_cost', 'position']], recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
 # Main Streamlit app logic
 def main():
@@ -190,11 +179,11 @@ def main():
 
                         # Display players to replace
                         st.subheader(f"Players to Replace ({num_to_replace}):")
-                        st.dataframe(players_to_replace[['player_name', 'form', 'now_cost']], hide_index=True)
+                        st.dataframe(players_to_replace[['player_name', 'form', 'now_cost', 'position']], hide_index=True)
 
                         # Display recommended transfers
                         st.subheader("Recommended Transfers")
-                        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
+                        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']], hide_index=True)
                     else:
                         st.info("Select the number of players to replace to view transfer recommendations.")
                 else:
@@ -205,6 +194,3 @@ def main():
             st.error("Unable to fetch team data. Please check your Team ID.")
     else:
         st.info("Enter your FPL Team ID to analyze your team.")
-
-if __name__ == "__main__":
-    main()
