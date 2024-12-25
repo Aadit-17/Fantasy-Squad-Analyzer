@@ -124,7 +124,7 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
 
     # Add position information to both worst players and available players
-    available_players['position'] = available_players['element_type'].apply(get_position_from_id)
+    available_players.loc[:, 'position'] = available_players['element_type'].apply(get_position_from_id)
 
     players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
     total_replace_cost = players_to_replace['now_cost'].sum()
@@ -162,8 +162,15 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
             if len(temp_transfers) >= num_to_replace:
                 break
 
-        # Convert 'now_cost' to numeric before using nlargest
-        temp_transfers['now_cost'] = pd.to_numeric(temp_transfers['now_cost'], errors='coerce')
+        # Debug: check columns in temp_transfers
+        st.write("Columns in temp_transfers:", temp_transfers.columns)
+
+        # Ensure 'now_cost' exists in temp_transfers before proceeding
+        if 'now_cost' in temp_transfers.columns:
+            # Convert 'now_cost' to numeric before using nlargest
+            temp_transfers['now_cost'] = pd.to_numeric(temp_transfers['now_cost'], errors='coerce')
+        else:
+            st.error("'now_cost' column is missing from temp_transfers")
 
         # If not enough players were selected, remove the most expensive player from the temp_transfers list and retry
         if len(temp_transfers) < num_to_replace:
@@ -172,7 +179,7 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
 
             # Exclude the most expensive player from the selected temp_transfers
             temp_transfers = temp_transfers[temp_transfers['player_id'] != most_expensive_player_id]
-        
+
         # Add valid transfers to the final recommended list
         recommended_transfers = temp_transfers
 
