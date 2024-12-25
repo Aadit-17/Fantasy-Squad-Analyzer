@@ -58,7 +58,6 @@ def get_position_from_id(position_id):
     return position_map.get(position_id, 'Unknown')
 
 # Function to get player's data
-# Function to get player's data
 def get_all_players():
     players_url = "https://fantasy.premierleague.com/api/bootstrap-static/"
     players_response = requests.get(players_url)
@@ -79,7 +78,7 @@ def get_all_players():
             'form': float(player['form']),  # Ensure form is a float
             'now_cost': player['now_cost'],
             'selected_by_percent': float(player['selected_by_percent']),
-            'position': get_position_from_id(player['element_type'])  # Convert position ID to human-readable position
+            'element_type': (player['element_type'])
         })
     
     return pd.DataFrame(player_info)
