@@ -83,108 +83,26 @@ def get_all_players():
     
     return pd.DataFrame(player_info)
 
-# Function to get best and worst performing players from the team's picks
-def get_best_worst_from_team_picks(team_picks, player_data):
-    # Extract player IDs from team picks
-    player_ids = [pick['element'] for pick in team_picks['picks']]
-    team_players = player_data[player_data['player_id'].isin(player_ids)]
+# Function to get recommended players based on the selected player's position
+def recommend_players_by_position(selected_player_name, player_data, same_price_checkbox):
+    # Get the selected player's details
+    selected_player = player_data[player_data['player_name'] == selected_player_name].iloc[0]
 
-    # Add a new column 'position' by mapping element_type
-    team_players['position'] = team_players['element_type'].apply(get_position_from_id)
+    # Get the position of the selected player
+    selected_position = selected_player['element_type']
 
-    worst_players = team_players.nsmallest(7, 'form')
-    best_players = team_players.nlargest(7, 'form')
+    # Filter available players by position
+    available_players = player_data[player_data['element_type'] == selected_position]
 
-    # Include position column in the return
-    return worst_players[['player_name', 'form', 'now_cost', 'position']], best_players[['player_name', 'form', 'now_cost', 'position']]
+    # If the same price checkbox is selected, filter players with the same price or less
+    if same_price_checkbox:
+        available_players = available_players[available_players['now_cost'] <= selected_player['now_cost']]
 
-# Function to get recommended transfers based on worst performers
-def get_recommended_transfers(worst_players, player_data):
-    total_worst_value = worst_players['now_cost'].sum()
-    
-    # Add position information based on element_type
-    player_data['position'] = player_data['element_type'].apply(get_position_from_id)
+    # Sort by form (descending) and selected_by_percent (ascending)
+    recommended_players = available_players.sort_values(by=['form', 'selected_by_percent'], ascending=[False, True]).head(3)
+    recommended_players['position'] = get_position_from_id(recommended_players['element_type'])
 
-    # Find better performing players within the budget and include differentials
-    potential_transfers = player_data[
-        (player_data['now_cost'] <= total_worst_value) & 
-        (player_data['form'] > worst_players['form'].sum() / 7) & 
-        (player_data['selected_by_percent'] < 15)  # Change here to less than 15
-    ].copy()
-
-    # Sort potential transfers by form, descending
-    recommended_transfers = potential_transfers.sort_values(by='form', ascending=False).head(7)
-
-    # Include position in recommended transfers
-    return recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
-
-
-def recommend_transfers_based_on_input(worst_players, player_data, team_picks, num_to_replace):
-    team_player_ids = [pick['element'] for pick in team_picks['picks']]
-    available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
-
-    # Add position information to both worst players and available players
-    available_players.loc[:, 'position'] = available_players['element_type'].apply(get_position_from_id)
-
-    players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
-    total_replace_cost = players_to_replace['now_cost'].sum()
-
-    recommended_transfers = pd.DataFrame()
-    total_budget_left = 45 * num_to_replace  # Set budget left for the x transfers
-
-    # Retry process if not enough players are transferred
-    while len(recommended_transfers) < num_to_replace:
-        available_players_copy = available_players.copy()  # Copy to avoid modification issues during iteration
-        temp_transfers = pd.DataFrame()  # Temporary dataframe to store the transfers
-
-        for i, (_, player) in enumerate(players_to_replace.iterrows()):
-            position = player['position']
-            if not position:
-                st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
-                continue
-
-            # Filter players based on position and budget constraints
-            replacement_candidates = available_players_copy[
-                (available_players_copy['position'] == position) & 
-                (available_players_copy['now_cost'] <= total_budget_left) & 
-                (available_players_copy['form'] > player['form'])
-            ].sort_values(by='form', ascending=False)
-
-            if not replacement_candidates.empty:
-                best_candidate = replacement_candidates.iloc[0]
-                temp_transfers = pd.concat([temp_transfers, best_candidate.to_frame().T], ignore_index=True)
-                total_budget_left -= best_candidate['now_cost']
-
-                # Remove the selected candidate from available players to avoid re-selection
-                available_players_copy = available_players_copy[available_players_copy['player_id'] != best_candidate['player_id']]
-
-            # Check if enough players are selected
-            if len(temp_transfers) >= num_to_replace:
-                break
-
-        # Debug: check columns in temp_transfers
-        st.write("Columns in temp_transfers:", temp_transfers.columns)
-
-        # Ensure 'now_cost' exists in temp_transfers before proceeding
-        if 'now_cost' in temp_transfers.columns:
-            # Convert 'now_cost' to numeric before using nlargest
-            temp_transfers['now_cost'] = pd.to_numeric(temp_transfers['now_cost'], errors='coerce')
-        else:
-            st.error("'now_cost' column is missing from temp_transfers")
-
-        # If not enough players were selected, exclude the most expensive player and retry
-        if len(temp_transfers) < num_to_replace:
-            # Identify the most expensive player in temp_transfers
-            most_expensive_player = temp_transfers.nlargest(1, 'now_cost')
-            most_expensive_player_id = most_expensive_player['player_id'].values[0]
-
-            # Exclude the most expensive player from available_players_copy for the next iteration
-            available_players_copy = available_players_copy[available_players_copy['player_id'] != most_expensive_player_id]
-
-        # Add valid transfers to the final recommended list
-        recommended_transfers = temp_transfers
-
-    return players_to_replace[['player_name', 'form', 'now_cost', 'position']], recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
+    return recommended_players[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
 def main():
     st.title("Fantasy Premier League Team Analyzer")
@@ -212,36 +130,23 @@ def main():
                 # Get all players data for analysis
                 player_data = get_all_players()
                 if player_data is not None:
-                    # Get best and worst performing players from the team's picks
-                    worst_players, best_players = get_best_worst_from_team_picks(team_picks, player_data)
+                    team_player_names = [player['player_name'] for player in team_picks['picks']]
 
-                    # Display the best performing players
-                    st.subheader("Best Performing Players from Your Picks")
-                    st.dataframe(best_players, hide_index=True)
+                    # Display the players' names for selection
+                    st.subheader("Select a Player to Replace")
 
-                    # Display the worst performing players
-                    st.subheader("Worst Performing Players from Your Picks")
-                    st.dataframe(worst_players, hide_index=True)
+                    selected_player_name = st.selectbox("Select a Player:", [player_name for player_name in player_data['player_name'] if player_name in team_player_names])
+                    same_price_checkbox = st.checkbox("Same Price")
 
-                    # Get user input for number of players to replace
-                    st.subheader("Transfer Recommendation")
-                    num_to_replace = st.selectbox("Select number of players to replace (1-5):", [0] + list(range(1, 6)))
-
-                    if num_to_replace > 0:
-                        # Recommend transfers based on user input
-                        players_to_replace, recommended_transfers = recommend_transfers_based_on_input(
-                            worst_players, player_data, team_picks, num_to_replace
+                    if selected_player_name:
+                        # Get recommended players based on the selected player
+                        recommended_players = recommend_players_by_position(
+                            selected_player_name, player_data, same_price_checkbox
                         )
 
-                        # Display players to replace
-                        st.subheader(f"Players to Replace ({num_to_replace}):")
-                        st.dataframe(players_to_replace[['player_name', 'form', 'now_cost', 'position']], hide_index=True)
-
-                        # Display recommended transfers
+                        # Display the recommended players
                         st.subheader("Recommended Transfers")
-                        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']], hide_index=True)
-                    else:
-                        st.info("Select the number of players to replace to view transfer recommendations.")
+                        st.dataframe(recommended_players, hide_index=True)
                 else:
                     st.error("Unable to fetch player data.")
             else:
