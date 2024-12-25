@@ -99,6 +99,34 @@ def get_recommended_transfers(worst_players, player_data):
 
     return recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']]
 
+# Function to recommend transfers based on user input for number of players to replace
+def recommend_transfers_based_on_input(worst_players, player_data, team_picks, num_to_replace):
+    # Filter players not in the user's team
+    team_player_ids = [pick['element'] for pick in team_picks['picks']]
+    available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
+
+    # Get the worst-performing players to replace
+    players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
+    total_replace_cost = players_to_replace['now_cost'].sum()
+
+    # Match replacements by position
+    recommended_transfers = pd.DataFrame()
+    for _, player in players_to_replace.iterrows():
+        position = player['player_id']  # Replace with position mapping logic if available
+        replacement_candidates = available_players[
+            (available_players['now_cost'] <= total_replace_cost) & 
+            (available_players['form'] > player['form'])
+        ].sort_values(by='form', ascending=False)
+
+        if not replacement_candidates.empty:
+            best_candidate = replacement_candidates.iloc[0]
+            recommended_transfers = recommended_transfers.append(best_candidate)
+            # Update the budget
+            total_replace_cost -= best_candidate['now_cost']
+
+    return players_to_replace, recommended_transfers
+
+
 # Main Streamlit app logic
 def main():
     st.title("Fantasy Premier League Team Analyzer")
@@ -137,12 +165,23 @@ def main():
                     st.subheader("Worst Performing Players from Your Picks")
                     st.dataframe(worst_players, hide_index=True)  # Hide index
 
-                    # Get recommended transfers based on the 7 worst performers
-                    recommended_transfers = get_recommended_transfers(worst_players, player_data)
+                    # Get user input for number of players to replace
+                    st.subheader("Transfer Recommendation")
+                    num_to_replace = st.selectbox("Select number of players to replace (1-5):", range(1, 6))
 
-                    # Display recommended transfers
-                    st.subheader("Recommended Transfers (Differentials)")
-                    st.dataframe(recommended_transfers, hide_index=True)  # Hide index
+                    if num_to_replace:
+                        # Recommend transfers based on user input
+                        players_to_replace, recommended_transfers = recommend_transfers_based_on_input(
+                            worst_players, player_data, team_picks, num_to_replace
+                        )
+
+                        # Display players to replace
+                        st.subheader(f"Players to Replace ({num_to_replace}):")
+                        st.dataframe(players_to_replace[['player_name', 'form', 'now_cost']], hide_index=True)
+
+                        # Display recommended transfers
+                        st.subheader("Recommended Transfers")
+                        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
 
 if __name__ == "__main__":
     main()
