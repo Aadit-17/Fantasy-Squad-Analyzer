@@ -12,7 +12,7 @@ def get_fpl_team_data(team_id):
         return None
     return response.json()
 
-# Function to get player's points data from a team's performance in a specific gameweek
+# Function to get player's picks for the current gameweek
 def get_player_data(team_id, gameweek):
     url = f"https://fantasy.premierleague.com/api/entry/{team_id}/event/{gameweek}/picks/"
     response = requests.get(url)
@@ -57,7 +57,7 @@ def get_position_from_id(position_id):
     }
     return position_map.get(position_id, 'Unknown')
 
-# Function to get player's data
+# Function to get all players data for analysis
 def get_all_players():
     players_url = "https://fantasy.premierleague.com/api/bootstrap-static/"
     players_response = requests.get(players_url)
@@ -78,13 +78,13 @@ def get_all_players():
             'form': float(player['form']),  # Ensure form is a float
             'now_cost': player['now_cost'],
             'selected_by_percent': float(player['selected_by_percent']),
-            'element_type': (player['element_type'])
+            'element_type': player['element_type']
         })
     
     return pd.DataFrame(player_info)
 
-# Function to get recommended players based on the selected player's position
-def recommend_players_by_position(selected_player_name, player_data, same_price_checkbox):
+# Function to get recommended players based on the selected player's position, excluding current team members
+def recommend_players_by_position(selected_player_name, player_data, same_price_checkbox, team_player_names):
     # Get the selected player's details
     selected_player = player_data[player_data['player_name'] == selected_player_name].iloc[0]
 
@@ -94,15 +94,21 @@ def recommend_players_by_position(selected_player_name, player_data, same_price_
     # Filter available players by position
     available_players = player_data[player_data['element_type'] == selected_position]
 
+    # Exclude players already in the team from the available list
+    available_players = available_players[~available_players['player_name'].isin(team_player_names)]
+
     # If the same price checkbox is selected, filter players with the same price or less
     if same_price_checkbox:
         available_players = available_players[available_players['now_cost'] <= selected_player['now_cost']]
 
     # Sort by form (descending) and selected_by_percent (ascending)
     recommended_players = available_players.sort_values(by=['form', 'selected_by_percent'], ascending=[False, True]).head(3)
-    recommended_players['position'] = get_position_from_id(recommended_players['element_type'])
+    
+    # Apply the position mapping to the DataFrame
+    recommended_players['position'] = recommended_players['element_type'].apply(get_position_from_id)
 
     return recommended_players[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
+
 
 def main():
     st.title("Fantasy Premier League Team Analyzer")
@@ -130,18 +136,22 @@ def main():
                 # Get all players data for analysis
                 player_data = get_all_players()
                 if player_data is not None:
-                    team_player_names = [player['player_name'] for player in team_picks['picks']]
+                    # Create a dictionary of player ID to player name for easy lookup
+                    player_name_dict = {player['player_id']: player['player_name'] for player in player_data.to_dict(orient='records')}
+                    
+                    # Get the player names in the user's team using player IDs from the picks
+                    team_player_names = [player_name_dict[pick['element']] for pick in team_picks['picks']]
 
-                    # Display the players' names for selection
+                    # Display the players' names for selection, limited to those in the user's team
                     st.subheader("Select a Player to Replace")
 
-                    selected_player_name = st.selectbox("Select a Player:", [player_name for player_name in player_data['player_name'] if player_name in team_player_names])
+                    selected_player_name = st.selectbox("Select a Player:", team_player_names)
                     same_price_checkbox = st.checkbox("Same Price")
 
                     if selected_player_name:
                         # Get recommended players based on the selected player
                         recommended_players = recommend_players_by_position(
-                            selected_player_name, player_data, same_price_checkbox
+                            selected_player_name, player_data, same_price_checkbox, team_player_names
                         )
 
                         # Display the recommended players
