@@ -124,7 +124,7 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
 
     # Add position information to both worst players and available players
-    worst_players['position'] = worst_players['element_type'].apply(get_position_from_id)
+    # worst_players['position'] = worst_players['element_type'].apply(get_position_from_id)
     available_players['position'] = available_players['element_type'].apply(get_position_from_id)
 
     players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
