@@ -124,30 +124,38 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
 
     # Add position information to both worst players and available players
-    # worst_players['position'] = worst_players['element_type'].apply(get_position_from_id)
     available_players['position'] = available_players['element_type'].apply(get_position_from_id)
 
     players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
     total_replace_cost = players_to_replace['now_cost'].sum()
 
     recommended_transfers = pd.DataFrame()
-    for _, player in players_to_replace.iterrows():
+    total_budget_left = 45 * num_to_replace  # Set budget left for the x transfers
+    for i, (_, player) in enumerate(players_to_replace.iterrows()):
         position = player['position']
         if not position:
             st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
             continue
 
+        # Filter players based on position and budget constraints
         replacement_candidates = available_players[
-            (available_players['now_cost'] <= total_replace_cost) & 
+            (available_players['position'] == position) & 
+            (available_players['now_cost'] <= total_budget_left) & 
             (available_players['form'] > player['form'])
         ].sort_values(by='form', ascending=False)
 
         if not replacement_candidates.empty:
             best_candidate = replacement_candidates.iloc[0]
             recommended_transfers = pd.concat([recommended_transfers, best_candidate.to_frame().T], ignore_index=True)
-            total_replace_cost -= best_candidate['now_cost']
+            total_budget_left -= best_candidate['now_cost']
 
-    # Include position data in the final recommended transfers
+            # Remove the selected candidate from available players
+            available_players = available_players[available_players['player_id'] != best_candidate['player_id']]
+
+            # Check if the total number of transfers matches the user input
+            if len(recommended_transfers) == num_to_replace:
+                break
+
     return players_to_replace[['player_name', 'form', 'now_cost', 'position']], recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
 def main():
