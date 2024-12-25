@@ -101,22 +101,21 @@ def get_recommended_transfers(worst_players, player_data):
 
 # Function to recommend transfers based on user input for number of players to replace
 def recommend_transfers_based_on_input(worst_players, player_data, team_picks, num_to_replace):
-    # Filter players not in the user's team
+    # Validate input DataFrames
+    print("Worst Players Columns:", worst_players.columns)
+    print("Player Data Columns:", player_data.columns)
+
     team_player_ids = [pick['element'] for pick in team_picks['picks']]
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
 
-    # Get the worst-performing players to replace
     players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
     total_replace_cost = players_to_replace['now_cost'].sum()
 
-    # Match replacements by position
     recommended_transfers = pd.DataFrame()
     for _, player in players_to_replace.iterrows():
-        # Use an alternate column or mapping if 'player_id' doesn't exist
-        position = player.get('player_id', None)  # Use .get() to avoid KeyError
-        if not position: 
-            # If position is unavailable, fallback or skip
-            st.warning("Position data missing for player.")
+        position = player.get('player_id')  # Replace if another column maps positions
+        if not position:
+            st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
             continue
 
         replacement_candidates = available_players[
@@ -126,11 +125,20 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
 
         if not replacement_candidates.empty:
             best_candidate = replacement_candidates.iloc[0]
-            recommended_transfers = recommended_transfers.append(best_candidate)
-            # Update the budget
+            recommended_transfers = pd.concat([recommended_transfers, best_candidate.to_frame().T], ignore_index=True)
             total_replace_cost -= best_candidate['now_cost']
 
     return players_to_replace, recommended_transfers
+
+# Display recommended transfers
+try:
+    if not recommended_transfers.empty:
+        st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
+    else:
+        st.warning("No recommended transfers available.")
+except KeyError as e:
+    st.error(f"Column missing: {e}")
+    print("Recommended Transfers Columns:", recommended_transfers.columns)
 
 
 # Main Streamlit app logic
