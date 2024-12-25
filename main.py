@@ -131,30 +131,47 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
 
     recommended_transfers = pd.DataFrame()
     total_budget_left = 45 * num_to_replace  # Set budget left for the x transfers
-    for i, (_, player) in enumerate(players_to_replace.iterrows()):
-        position = player['position']
-        if not position:
-            st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
-            continue
 
-        # Filter players based on position and budget constraints
-        replacement_candidates = available_players[
-            (available_players['position'] == position) & 
-            (available_players['now_cost'] <= total_budget_left) & 
-            (available_players['form'] > player['form'])
-        ].sort_values(by='form', ascending=False)
+    # Retry process if not enough players are transferred
+    while len(recommended_transfers) < num_to_replace:
+        available_players_copy = available_players.copy()  # Copy to avoid modification issues during iteration
+        temp_transfers = pd.DataFrame()  # Temporary dataframe to store the transfers
 
-        if not replacement_candidates.empty:
-            best_candidate = replacement_candidates.iloc[0]
-            recommended_transfers = pd.concat([recommended_transfers, best_candidate.to_frame().T], ignore_index=True)
-            total_budget_left -= best_candidate['now_cost']
+        for i, (_, player) in enumerate(players_to_replace.iterrows()):
+            position = player['position']
+            if not position:
+                st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
+                continue
 
-            # Remove the selected candidate from available players
-            available_players = available_players[available_players['player_id'] != best_candidate['player_id']]
+            # Filter players based on position and budget constraints
+            replacement_candidates = available_players_copy[
+                (available_players_copy['position'] == position) & 
+                (available_players_copy['now_cost'] <= total_budget_left) & 
+                (available_players_copy['form'] > player['form'])
+            ].sort_values(by='form', ascending=False)
 
-            # Check if the total number of transfers matches the user input
-            if len(recommended_transfers) == num_to_replace:
+            if not replacement_candidates.empty:
+                best_candidate = replacement_candidates.iloc[0]
+                temp_transfers = pd.concat([temp_transfers, best_candidate.to_frame().T], ignore_index=True)
+                total_budget_left -= best_candidate['now_cost']
+
+                # Remove the selected candidate from available players to avoid re-selection
+                available_players_copy = available_players_copy[available_players_copy['player_id'] != best_candidate['player_id']]
+
+            # Check if enough players are selected
+            if len(temp_transfers) >= num_to_replace:
                 break
+
+        # If not enough players were selected, remove the most expensive player and retry
+        if len(temp_transfers) < num_to_replace:
+            most_expensive_player = temp_transfers.nlargest(1, 'now_cost')
+            most_expensive_player_id = most_expensive_player['player_id'].values[0]
+
+            # Exclude the most expensive player from the selection for the next iteration
+            players_to_replace = players_to_replace[players_to_replace['player_id'] != most_expensive_player_id]
+        
+        # Add valid transfers to the final recommended list
+        recommended_transfers = temp_transfers
 
     return players_to_replace[['player_name', 'form', 'now_cost', 'position']], recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
