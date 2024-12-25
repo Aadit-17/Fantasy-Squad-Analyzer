@@ -172,13 +172,14 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
         else:
             st.error("'now_cost' column is missing from temp_transfers")
 
-        # If not enough players were selected, remove the most expensive player from the temp_transfers list and retry
+        # If not enough players were selected, exclude the most expensive player and retry
         if len(temp_transfers) < num_to_replace:
+            # Identify the most expensive player in temp_transfers
             most_expensive_player = temp_transfers.nlargest(1, 'now_cost')
             most_expensive_player_id = most_expensive_player['player_id'].values[0]
 
-            # Exclude the most expensive player from the selected temp_transfers
-            temp_transfers = temp_transfers[temp_transfers['player_id'] != most_expensive_player_id]
+            # Exclude the most expensive player from available_players_copy for the next iteration
+            available_players_copy = available_players_copy[available_players_copy['player_id'] != most_expensive_player_id]
 
         # Add valid transfers to the final recommended list
         recommended_transfers = temp_transfers
