@@ -162,6 +162,9 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
             if len(temp_transfers) >= num_to_replace:
                 break
 
+        # Convert 'now_cost' to numeric before using nlargest
+        temp_transfers['now_cost'] = pd.to_numeric(temp_transfers['now_cost'], errors='coerce')
+
         # If not enough players were selected, remove the most expensive player and retry
         if len(temp_transfers) < num_to_replace:
             most_expensive_player = temp_transfers.nlargest(1, 'now_cost')
