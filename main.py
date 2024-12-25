@@ -47,6 +47,17 @@ def plot_points_trend(team_data):
     plt.grid(True)
     st.pyplot(plt)
 
+# Function to map element_type (position_id) to human-readable position
+def get_position_from_id(position_id):
+    position_map = {
+        1: 'GK',  # Goalkeeper
+        2: 'DEF', # Defender
+        3: 'MID', # Midfielder
+        4: 'FWD'  # Forward
+    }
+    return position_map.get(position_id, 'Unknown')
+
+# Function to get player's data
 # Function to get player's data
 def get_all_players():
     players_url = "https://fantasy.premierleague.com/api/bootstrap-static/"
@@ -68,7 +79,7 @@ def get_all_players():
             'form': float(player['form']),  # Ensure form is a float
             'now_cost': player['now_cost'],
             'selected_by_percent': float(player['selected_by_percent']),
-            'position': player['position']
+            'position': get_position_from_id(player['element_type'])  # Convert position ID to human-readable position
         })
     
     return pd.DataFrame(player_info)
@@ -78,40 +89,51 @@ def get_best_worst_from_team_picks(team_picks, player_data):
     # Extract player IDs from team picks
     player_ids = [pick['element'] for pick in team_picks['picks']]
     team_players = player_data[player_data['player_id'].isin(player_ids)]
-    
+
+    # Add a new column 'position' by mapping element_type
+    team_players['position'] = team_players['element_type'].apply(get_position_from_id)
+
     worst_players = team_players.nsmallest(7, 'form')
     best_players = team_players.nlargest(7, 'form')
 
-    # Include position column
+    # Include position column in the return
     return worst_players[['player_name', 'form', 'now_cost', 'position']], best_players[['player_name', 'form', 'now_cost', 'position']]
 
 # Function to get recommended transfers based on worst performers
 def get_recommended_transfers(worst_players, player_data):
     total_worst_value = worst_players['now_cost'].sum()
     
+    # Add position information based on element_type
+    player_data['position'] = player_data['element_type'].apply(get_position_from_id)
+
     # Find better performing players within the budget and include differentials
     potential_transfers = player_data[
         (player_data['now_cost'] <= total_worst_value) & 
-        (player_data['form'] > worst_players['form'].sum() / 7) &
+        (player_data['form'] > worst_players['form'].sum() / 7) & 
         (player_data['selected_by_percent'] < 15)  # Change here to less than 15
     ].copy()
 
     # Sort potential transfers by form, descending
     recommended_transfers = potential_transfers.sort_values(by='form', ascending=False).head(7)
 
-    return recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']]
+    # Include position in recommended transfers
+    return recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
-# Function to recommend transfers based on user input for number of players to replace
+
 def recommend_transfers_based_on_input(worst_players, player_data, team_picks, num_to_replace):
     team_player_ids = [pick['element'] for pick in team_picks['picks']]
     available_players = player_data[~player_data['player_id'].isin(team_player_ids)]
+
+    # Add position information to both worst players and available players
+    worst_players['position'] = worst_players['element_type'].apply(get_position_from_id)
+    available_players['position'] = available_players['element_type'].apply(get_position_from_id)
 
     players_to_replace = worst_players.nsmallest(num_to_replace, 'form')
     total_replace_cost = players_to_replace['now_cost'].sum()
 
     recommended_transfers = pd.DataFrame()
     for _, player in players_to_replace.iterrows():
-        position = player['position']  # Correctly accessing position here
+        position = player['position']
         if not position:
             st.warning(f"Missing position data for player: {player.get('player_name', 'Unnamed')}")
             continue
@@ -129,7 +151,6 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
     # Include position data in the final recommended transfers
     return players_to_replace[['player_name', 'form', 'now_cost', 'position']], recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent', 'position']]
 
-# Main Streamlit app logic
 def main():
     st.title("Fantasy Premier League Team Analyzer")
     
@@ -161,11 +182,11 @@ def main():
 
                     # Display the best performing players
                     st.subheader("Best Performing Players from Your Picks")
-                    st.dataframe(best_players, hide_index=True)  # Hide index
+                    st.dataframe(best_players, hide_index=True)
 
                     # Display the worst performing players
                     st.subheader("Worst Performing Players from Your Picks")
-                    st.dataframe(worst_players, hide_index=True)  # Hide index
+                    st.dataframe(worst_players, hide_index=True)
 
                     # Get user input for number of players to replace
                     st.subheader("Transfer Recommendation")
