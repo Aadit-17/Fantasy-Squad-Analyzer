@@ -112,7 +112,13 @@ def recommend_transfers_based_on_input(worst_players, player_data, team_picks, n
     # Match replacements by position
     recommended_transfers = pd.DataFrame()
     for _, player in players_to_replace.iterrows():
-        position = player['player_id']  # Replace with position mapping logic if available
+        # Use an alternate column or mapping if 'player_id' doesn't exist
+        position = player.get('player_id', None)  # Use .get() to avoid KeyError
+        if not position: 
+            # If position is unavailable, fallback or skip
+            st.warning("Position data missing for player.")
+            continue
+
         replacement_candidates = available_players[
             (available_players['now_cost'] <= total_replace_cost) & 
             (available_players['form'] > player['form'])
