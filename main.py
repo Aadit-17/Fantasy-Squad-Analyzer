@@ -194,3 +194,6 @@ def main():
             st.error("Unable to fetch team data. Please check your Team ID.")
     else:
         st.info("Enter your FPL Team ID to analyze your team.")
+
+if __name__ == "__main__":
+    main()
