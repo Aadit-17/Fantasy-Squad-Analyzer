@@ -83,6 +83,16 @@ def get_all_players():
     
     return pd.DataFrame(player_info)
 
+# Function to get best and worst performing players from the team's picks
+def get_best_worst_from_team_picks(team_picks, player_data):
+    # Extract player IDs from team picks
+    player_ids = [pick['element'] for pick in team_picks['picks']]
+    team_players = player_data[player_data['player_id'].isin(player_ids)]
+    
+    worst_players = team_players.nsmallest(7, 'form')
+    best_players = team_players.nlargest(7, 'form')
+    return worst_players[['player_name', 'form', 'now_cost']], best_players[['player_name', 'form', 'now_cost']]
+
 # Function to get recommended players based on the selected player's position, excluding current team members
 def recommend_players_by_position(selected_player_name, player_data, same_price_checkbox, team_player_names):
     # Get the selected player's details
@@ -136,6 +146,17 @@ def main():
                 # Get all players data for analysis
                 player_data = get_all_players()
                 if player_data is not None:
+                    # Get best and worst performing players from the team's picks
+                    worst_players, best_players = get_best_worst_from_team_picks(team_picks, player_data)
+
+                    # Display the best performing players
+                    st.subheader("Best Performing Players from Your Picks")
+                    st.dataframe(best_players, hide_index=True)
+                    
+                    # Display the worst performing players
+                    st.subheader("Worst Performing Players from Your Picks")
+                    st.dataframe(worst_players, hide_index=True) 
+
                     # Create a dictionary of player ID to player name for easy lookup
                     player_name_dict = {player['player_id']: player['player_name'] for player in player_data.to_dict(orient='records')}
                     
