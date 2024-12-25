@@ -142,6 +142,7 @@ except KeyError as e:
 
 
 # Main Streamlit app logic
+# Main Streamlit app logic
 def main():
     st.title("Fantasy Premier League Team Analyzer")
     
@@ -181,9 +182,9 @@ def main():
 
                     # Get user input for number of players to replace
                     st.subheader("Transfer Recommendation")
-                    num_to_replace = st.selectbox("Select number of players to replace (1-5):", range(1, 6))
+                    num_to_replace = st.selectbox("Select number of players to replace (1-5):", [0] + list(range(1, 6)))
 
-                    if num_to_replace:
+                    if num_to_replace > 0:
                         # Recommend transfers based on user input
                         players_to_replace, recommended_transfers = recommend_transfers_based_on_input(
                             worst_players, player_data, team_picks, num_to_replace
@@ -196,6 +197,8 @@ def main():
                         # Display recommended transfers
                         st.subheader("Recommended Transfers")
                         st.dataframe(recommended_transfers[['player_name', 'form', 'now_cost', 'selected_by_percent']], hide_index=True)
+                    else:
+                        st.info("Select the number of players to replace to view transfer recommendations.")
 
 if __name__ == "__main__":
     main()
